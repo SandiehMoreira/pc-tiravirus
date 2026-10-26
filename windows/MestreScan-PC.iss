@@ -86,7 +86,8 @@ procedure FecharMestreScan();
 var
   Code: Integer;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /FI "WINDOWTITLE eq MestreScan PC*"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  // So o cmd.exe: a janela do proprio Setup ("MestreScan PC x.y.z - Instalador") tambem casa com o titulo.
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /FI "IMAGENAME eq cmd.exe" /FI "WINDOWTITLE eq MestreScan PC*"', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.Path -like ''' +
     ExpandConstant('{app}') + '\*'' } | Stop-Process -Force -ErrorAction SilentlyContinue"', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
