@@ -22,7 +22,9 @@ Write-Host '  MestreScan PC - Plugou o cabo, ele limpa.' -ForegroundColor Yellow
 Write-Host ''
 
 # ---------- Node ----------
-$Node = Join-Path $Runtime 'node\node.exe'
+# O Setup.exe extrai o Node em runtime\node-<versao>-win-x64 (versoes antigas: runtime\node).
+$Node = Join-Path $Runtime "node-$NodeVersion-win-x64\node.exe"
+if (-not (Test-Path $Node)) { $Node = Join-Path $Runtime 'node\node.exe' }
 if (-not (Test-Path $Node)) {
     $sys = Get-Command node -ErrorAction SilentlyContinue
     $major = 0
@@ -33,8 +35,7 @@ if (-not (Test-Path $Node)) {
         Write-Host '  Primeira vez: baixando o Node.js portatil...'
         $name = "node-$NodeVersion-win-x64"
         Get-Zip "https://nodejs.org/dist/$NodeVersion/$name.zip" $Runtime
-        Rename-Item (Join-Path $Runtime $name) 'node'
-        $Node = Join-Path $Runtime 'node\node.exe'
+        $Node = Join-Path $Runtime "$name\node.exe"
     }
 }
 

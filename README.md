@@ -9,12 +9,34 @@ a mesma tabela de pontos (`rules.json`).
 
 Por enquanto é só para **Windows**.
 
+## Instalar
+
+**Jeito fácil:** baixe e rode **`MestreScan-PC-Setup.exe`** (em sandieh.online).
+Avançar › Avançar › Instalar. O instalador:
+
+- não pede administrador (instala em `%LOCALAPPDATA%\Programs\MestreScan PC`);
+- baixa o Node.js portátil e o ADB (platform-tools) durante a instalação;
+- cria os atalhos no Menu Iniciar e na Área de Trabalho;
+- se a opção estiver marcada, baixa o **driver USB da Samsung** do site da
+  Samsung (confere a assinatura digital) e abre o instalador dele. Também dá
+  para instalar depois pelo atalho *Instalar driver USB Samsung*;
+- aparece em *Configurações › Aplicativos* para desinstalar (a pasta `casos\`
+  com os backups é mantida).
+
+O Windows pode mostrar "O Windows protegeu o computador" (o Setup não tem
+assinatura digital): clique em **Mais informações › Executar assim mesmo**.
+
+**Versão portátil:** extraia o zip e dê dois cliques em `Abrir MestreScan PC.bat`;
+na primeira vez ele baixa o Node.js e o ADB para a pasta `runtime\`.
+
+Para gerar o Setup: `windows\gerar-setup.bat` (precisa do Inno Setup 6:
+`winget install JRSoftware.InnoSetup`). Sai em `build\MestreScan-PC-Setup.exe`.
+
 ## Como usar
 
-1. Dois cliques em **`Abrir MestreScan PC.bat`**.
-   Na primeira vez ele baixa o Node.js portátil e o ADB (platform-tools) para a
-   pasta `runtime\`. Depois disso abre direto. A tela abre no navegador em
-   http://localhost:5757. Deixe a janela preta aberta.
+1. Abra o **MestreScan PC** (atalho) ou `Abrir MestreScan PC.bat`.
+   A tela abre no navegador em http://localhost:5757. A janela preta fica
+   minimizada na barra de tarefas: fechar ela desliga o programa.
 2. No celular, ligue a **Depuração USB** (Configurações › Sobre o telefone ›
    toque 7× em *Número da versão* › Opções do desenvolvedor › Depuração USB).
 3. Plugue o cabo e toque em **Permitir** no celular.
