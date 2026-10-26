@@ -65,40 +65,42 @@ function render() {
     document.documentElement.style.setProperty('--' + k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase()), v);
   }
 
-  const ready = devices.filter((d) => d.state === 'device');
-  const unauthorized = devices.find((d) => d.state === 'unauthorized');
+  const ready = devices.filter((d) => d.state === 'device' && !d.remote);
+  const unauthorized = devices.find((d) => d.state === 'unauthorized' && !d.remote);
   const cable = $('cable');
   if (!adb.found) { cable.className = 'cable warn'; $('cableText').textContent = 'ADB não encontrado'; }
   else if (ready.length) { cable.className = 'cable on'; $('cableText').textContent = ready.length > 1 ? `${ready.length} celulares` : (ready[0].model || ready[0].serial); }
   else if (unauthorized) { cable.className = 'cable warn'; $('cableText').textContent = 'Aguardando permissão no celular'; }
+  else if (state.diag && !['waiting', 'unauthorized'].includes(state.diag.code)) { cable.className = 'cable warn'; $('cableText').textContent = state.diag.title; }
   else { cable.className = 'cable'; $('cableText').textContent = 'Nenhum celular'; }
 
-  renderWaiting(adb, unauthorized, session);
+  renderWaiting(state.diag, session);
+  renderNotes(state.notes || []);
   renderTabs(sessions, session);
   if (session) renderSession(session);
 }
 
-function renderWaiting(adb, unauthorized, session) {
+const DIAG_ICON = { waiting: '🔌', unauthorized: '📱', no_driver: '🧩', no_debug: '🛠️', adb_conflict: '⚔️', usb_fail: '🔌', offline: '📵', recovery: '🔁', duplicate_serial: '👯', adb_not_listing: '🔄', no_adb: '⚠️' };
+
+function renderWaiting(diag, session) {
   const w = $('waiting');
-  if (session) { w.classList.add('hidden'); return; }
-  w.classList.remove('hidden');
-  if (!adb.found) {
-    w.innerHTML = `<h1>ADB não encontrado</h1>
-      <p>Feche esta janela e abra de novo pelo <b>Abrir MestreScan PC</b>: ele baixa o ADB sozinho na primeira vez.</p>`;
-  } else if (unauthorized) {
-    w.innerHTML = `<div class="phone">📱</div><h1>Olhe a tela do celular</h1>
-      <p>Apareceu <b>"Permitir depuração USB?"</b>. Marque <b>"Sempre permitir deste computador"</b> e toque em <b>Permitir</b>.</p>
-      <p class="muted">Não apareceu? Desbloqueie a tela, tire e coloque o cabo de novo.</p>`;
-  } else {
-    w.innerHTML = `<div class="phone">🔌</div><h1>Plugue o celular no cabo</h1>
-      <p class="muted">Assim que ele conectar, o MestreScan escaneia e remove os vírus sozinho.</p>
-      <ol>
-        <li>No celular, vá em <b>Configurações › Sobre o telefone</b> e toque 7 vezes em <b>Número da versão</b> (Xiaomi: <b>Versão da MIUI/HyperOS</b>).</li>
-        <li>Volte e abra <b>Opções do desenvolvedor</b>. Ligue a <b>Depuração USB</b>.</li>
-        <li>Plugue o cabo (de dados, não só de carga) e toque em <b>Permitir</b>.</li>
-        <li>Samsung no Windows: instale o <b>Samsung Android USB Driver</b> se não aparecer.</li>
-      </ol>`;
-  }
+  if (session || !diag) { w.classList.add('hidden'); return; }
+  // Os textos do diagnóstico vêm prontos (com <b>) do servidor; o que veio do celular já foi escapado lá.
+  const fixes = (diag.fixes || []).map((x) => x.link
+    ? `<a class="btn" href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.label)} ↗</a>`
+    : `<button class="primary" data-fix="${esc(x.fix)}">${esc(x.label)}</button>`).join('');
+  const steps = diag.steps && diag.steps.length ? `<ol>${diag.steps.map((x) => `<li>${x}</li>`).join('')}</ol>` : '';
+  const trouble = diag.trouble ? `<details><summary>Plugou e nada aconteceu?</summary><ul>${diag.trouble.map((x) => `<li>${x}</li>`).join('')}</ul></details>` : '';
+  w.className = 'card' + (diag.code === 'waiting' ? '' : ' alert');
+  w.innerHTML = `<div class="phone">${DIAG_ICON[diag.code] || '🔌'}</div><h1>${diag.title}</h1>
+    <p${diag.code === 'waiting' ? ' class="muted"' : ''}>${diag.text}</p>${steps}
+    ${fixes ? `<div class="fixes">${fixes}</div>` : ''}${trouble}`;
+}
+
+function renderNotes(notes) {
+  const n = $('notes');
+  n.classList.toggle('hidden', !notes.length);
+  n.innerHTML = notes.map((x) => `<div>ℹ️ ${esc(x)}</div>`).join('');
 }
 
 function renderTabs(sessions, session) {
@@ -220,6 +222,13 @@ document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('button');
   if (!btn || btn.disabled) return;
   if (btn.dataset.act) return doAction(btn.dataset.act, btn.dataset.pkg);
+  if (btn.dataset.fix) {
+    btn.disabled = true;
+    toast('Resolvendo…');
+    try { toast((await api('/api/fix', { fix: btn.dataset.fix })).message, 6000); } catch (e) { toast(e.message, 8000); }
+    btn.disabled = false; lastJson = '';
+    return;
+  }
   if (btn.dataset.serial) { await api('/api/select', { serial: btn.dataset.serial }); lastJson = ''; return; }
   if ('openAdmins' in btn.dataset) { api('/api/open-admins', {}).then(() => toast('Tela de administradores aberta no celular.')).catch((e) => toast(e.message)); }
 });

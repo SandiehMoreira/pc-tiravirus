@@ -58,7 +58,10 @@ function shell(cmd) {
     const p = pkgs[m[1]];
     return p && p.overlay ? `SYSTEM_ALERT_WINDOW: ${p.overlay}; time=+1d` : 'No operations.';
   }
-  if ((m = cmd.match(/^appops set (\S+) SYSTEM_ALERT_WINDOW deny$/))) { if (pkgs[m[1]]) { pkgs[m[1]].overlay = 'deny'; save(); } return ''; }
+  if ((m = cmd.match(/^appops set (\S+) SYSTEM_ALERT_WINDOW deny$/))) {
+    // Xiaomi sem "Depuração USB (Configurações de segurança)".
+    if (st.denyAppops) return 'Security exception: uid 2000 does not have android.permission.MANAGE_APP_OPS_MODES.\njava.lang.SecurityException: uid 2000 does not have android.permission.MANAGE_APP_OPS_MODES.';
+    if (pkgs[m[1]]) { pkgs[m[1]].overlay = 'deny'; save(); } return ''; }
   if (cmd.startsWith('am force-stop')) return '';
   if (cmd.startsWith('am start')) { st.openedAdmins = (st.openedAdmins || 0) + 1; save(); return 'Starting: Intent { cmp=com.android.settings/.DeviceAdminSettings }'; }
   if ((m = cmd.match(/^pm path (\S+)$/))) return pkgs[m[1]] ? `package:/data/app/~~x==/${m[1]}-1/base.apk` : '';

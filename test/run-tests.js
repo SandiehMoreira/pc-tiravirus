@@ -15,6 +15,7 @@ const inspector = require('../src/inspector');
 const engine = require('../src/engine');
 const actions = require('../src/actions');
 const { createApp } = require('../src/server');
+const diagnose = require('../src/diagnose');
 
 const rules = engine.loadRules();
 const tests = [];
@@ -282,6 +283,109 @@ test('servidor recusa acesso de fora (Host diferente)', async () => {
   } finally {
     await app.close();
   }
+});
+
+// ---------- diagnóstico de conexão ----------
+
+const pnp = (...list) => JSON.stringify(list.map(([DeviceID, Name, PNPClass, err = 0]) => ({ DeviceID, Name, PNPClass, Service: '', ConfigManagerErrorCode: err })));
+const diagFor = (entries, extra = {}) => diagnose.diagnose({
+  adbFound: true, devices: [], usb: diagnose.classifyUsb(diagnose.parsePnp(entries)), ...extra,
+});
+
+test('diagnóstico: Samsung sem driver, Motorola sem depuração, Xiaomi pronto', () => {
+  let d = diagFor(pnp(
+    ['USB\\VID_04E8&PID_6860\\R58M1', 'SM-A105M', 'WPD'],
+    ['USB\\VID_04E8&PID_6860&MI_01\\6&1', 'SAMSUNG_Android', null, 28],
+  ));
+  assert.strictEqual(d.code, 'no_driver');
+  assert.ok(d.title.includes('Samsung'));
+  assert.deepStrictEqual(d.fixes.map((x) => x.fix), ['samsung-driver']);
+
+  d = diagFor(pnp(['USB\\VID_22B8&PID_2E82\\ZY22', 'moto g(8)', 'WPD']));
+  assert.strictEqual(d.code, 'no_debug');
+
+  d = diagFor(pnp(['USB\\VID_18D1&PID_4EE7&MI_01\\6&2', 'Android Composite ADB Interface', 'AndroidUsbDeviceClass']));
+  assert.strictEqual(d.code, 'adb_not_listing');
+  assert.strictEqual(d.fixes[0].fix, 'restart-adb');
+
+  d = diagFor(pnp(['USB\\VID_2717&PID_FF48\\abc', 'Redmi Note 8', 'WPD'], ['USB\\VID_2717&PID_FF48&MI_01\\6&3', 'ADB Interface', null, 28]));
+  assert.strictEqual(d.code, 'no_driver');
+  assert.ok(d.fixes.some((x) => x.fix === 'device-manager'));
+});
+
+test('diagnóstico: teclado da Samsung não é celular; cabo ruim; nada plugado', () => {
+  assert.strictEqual(diagFor(pnp(['USB\\VID_04E8&PID_7021&MI_00\\1', 'Dispositivo de Entrada USB', 'HIDClass'])).code, 'waiting');
+  assert.strictEqual(diagFor(pnp(['USB\\VID_0000&PID_0002\\5&1', 'Dispositivo USB Desconhecido (Falha na Solicitação de Descritor)', 'USB', 43])).code, 'usb_fail');
+  assert.strictEqual(diagFor('').code, 'waiting');
+});
+
+test('diagnóstico: permissão demorando, offline, recovery, conflito de ADB', () => {
+  const unauth = [{ serial: 'X1', state: 'unauthorized' }];
+  assert.strictEqual(diagFor('', { devices: unauth, unauthorizedSince: Date.now() }).fixes.length, 0);
+  const late = diagFor('', { devices: unauth, unauthorizedSince: Date.now() - 60000 });
+  assert.ok(late.steps.some((x) => x.includes('Revogar')));
+  assert.strictEqual(late.fixes[0].fix, 'restart-adb');
+  assert.strictEqual(diagFor('', { devices: [{ serial: 'X1', state: 'offline' }] }).code, 'offline');
+  assert.strictEqual(diagFor('', { devices: [{ serial: 'X1', state: 'recovery' }] }).code, 'recovery');
+  const war = diagFor('', { adbProblem: 'version', rival: 'Huawei HiSuite' });
+  assert.strictEqual(war.code, 'adb_conflict');
+  assert.ok(war.text.includes('HiSuite'));
+  assert.strictEqual(diagFor('', { adbFound: false }).code, 'no_adb');
+
+  assert.strictEqual(diagnose.adbServerProblem('adb server version (40) doesn\'t match this client (41); killing...'), 'version');
+  assert.strictEqual(diagnose.adbServerProblem('error: could not install *smartsocket* listener: cannot bind to 127.0.0.1:5037'), 'port');
+  assert.strictEqual(diagnose.adbServerProblem('* daemon started successfully'), null);
+  assert.strictEqual(diagnose.rivalName('HiSuite', 'C:\\Program Files\\HiSuite\\HiSuite.exe'), 'Huawei HiSuite');
+});
+
+test('diagnóstico: emulador/Wi-Fi ignorados e serial repetido', () => {
+  assert.ok(diagnose.isRemoteSerial('emulator-5554'));
+  assert.ok(diagnose.isRemoteSerial('127.0.0.1:5555'));
+  assert.ok(diagnose.isRemoteSerial('adb-R58M1-abc._adb-tls-connect._tcp'));
+  assert.ok(!diagnose.isRemoteSerial('R58M123ABC'));
+  const dup = diagFor('', { devices: [{ serial: '0123456789ABCDEF', state: 'device' }, { serial: '0123456789ABCDEF', state: 'device' }] });
+  assert.strictEqual(dup.code, 'duplicate_serial');
+  assert.strictEqual(diagnose.notes([{ serial: 'emulator-5554', state: 'device' }]).length, 1);
+});
+
+test('dicas para erros do Android (Xiaomi, Oppo, MDM, cabo)', () => {
+  assert.ok(diagnose.actionHint('Sobreposição não bloqueou: java.lang.SecurityException: uid 2000 does not have android.permission.MANAGE_APP_OPS_MODES', 'Xiaomi').includes('Configurações de segurança'));
+  assert.ok(diagnose.actionHint('java.lang.SecurityException: Permission Denial: WRITE_SECURE_SETTINGS', 'OPPO').includes('monitoramento de permissões'));
+  assert.ok(diagnose.actionHint('Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]', 'Xiaomi').includes('Instalar via USB'));
+  assert.ok(diagnose.actionHint('Failure [DELETE_FAILED_USER_RESTRICTED]', 'samsung').includes('MDM'));
+  assert.ok(diagnose.actionHint("error: device 'X1' not found", 'samsung').includes('cabo'));
+  assert.strictEqual(diagnose.actionHint('Success', 'samsung'), null);
+});
+
+test('servidor: emulador não vira atendimento; Samsung sem driver aparece na tela', async () => {
+  const usbFile = path.join(TMP, 'usb.json');
+  fs.writeFileSync(usbFile, pnp(['USB\\VID_04E8&PID_6860&MI_01\\6&1', 'SAMSUNG_Android', null, 28]));
+  process.env.MESTRESCAN_USB_JSON = usbFile;
+  writePhone({ ...phone(), devices: [{ serial: 'emulator-5554', state: 'device', model: 'sdk' }] });
+  const app = createApp({ port: 0, monitorMs: 200 });
+  const port = await app.listen();
+  try {
+    const get = () => fetch(`http://localhost:${port}/api/state`, { headers: { 'X-Token': app.token } }).then((r) => r.json());
+    const st = await waitFor(async () => { const s = await get(); return s.diag.code === 'no_driver' ? s : null; });
+    assert.strictEqual(st.sessions.length, 0);
+    assert.strictEqual(st.notes.length, 1);
+    assert.ok(st.devices[0].remote);
+  } finally {
+    delete process.env.MESTRESCAN_USB_JSON;
+    await app.close();
+  }
+});
+
+test('Xiaomi recusa a sobreposição: remove mesmo assim e explica', async () => {
+  const p = phone();
+  p.props.manufacturer = 'Xiaomi';
+  p.denyAppops = true;
+  writePhone(p);
+  const r = await actions.removeApp('FAKE123', { pkg: 'com.funny.game' }, {});
+  assert.strictEqual(r.state, 'removed');
+  const text = r.steps.join('\n');
+  assert.ok(/não bloqueou/.test(text));
+  assert.ok(diagnose.actionHint(text, 'Xiaomi').includes('Configurações de segurança'));
 });
 
 (async () => {

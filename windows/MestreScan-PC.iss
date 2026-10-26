@@ -5,7 +5,7 @@
 ; durante a instalacao, cria os atalhos e, se marcado, instala o driver USB da Samsung.
 
 #define AppName "MestreScan PC"
-#define AppVersion "0.2.0"
+#define AppVersion "0.3.0"
 #define NodeVersion "v22.12.0"
 
 [Setup]
@@ -75,8 +75,40 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 Filename: "{app}\Abrir MestreScan PC.bat"; WorkingDir: "{app}"; Description: "Abrir o MestreScan PC agora"; \
   Flags: postinstall nowait skipifsilent shellexec runminimized
 
-[UninstallRun]
-Filename: "taskkill.exe"; Parameters: "/F /T /FI ""WINDOWTITLE eq MestreScan PC*"""; Flags: runhidden; RunOnceId: "FecharServidor"
-
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\runtime"
+
+[Code]
+// Fecha o MestreScan aberto e o ADB dele (o adb.exe continua rodando em segundo
+// plano depois de fechar o programa). Sem isso a atualizacao e a desinstalacao
+// falham com "arquivo em uso".
+procedure FecharMestreScan();
+var
+  Code: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /FI "WINDOWTITLE eq MestreScan PC*"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.Path -like ''' +
+    ExpandConstant('{app}') + '\*'' } | Stop-Process -Force -ErrorAction SilentlyContinue"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  FecharMestreScan();
+  Result := '';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then FecharMestreScan();
+end;
+
+// O Node tem arquivos com caminho comprido: pasta longa estoura o limite de 260 do Windows.
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = wpSelectDir) and (Length(WizardDirValue) > 100) then begin
+    MsgBox('Esta pasta tem o caminho muito comprido e o Windows pode nao conseguir instalar.' + #13#10 +
+      'Escolha uma pasta mais curta (ex.: C:\MestreScan PC).', mbError, MB_OK);
+    Result := False;
+  end;
+end;

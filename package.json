@@ -1,6 +1,6 @@
 {
   "name": "mestrescan-pc",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MestreScan PC — remove vírus de propaganda de celulares Android pelo cabo USB (ADB). Plugou o cabo, ele limpa.",
   "main": "src/server.js",
   "private": true,

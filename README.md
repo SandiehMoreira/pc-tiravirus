@@ -48,8 +48,35 @@ A partir daí é automático:
   *Remover perigosos sozinho*);
 - **suspeitos (30–59)** ficam para o técnico decidir: *Remover* ou *Só desativar*.
 
-Samsung no Windows: se o celular não aparecer, instale o
-**Samsung Android USB Driver**.
+## Não conectou? O programa diz o porquê
+
+Enquanto nenhum celular está pronto, o MestreScan cruza o `adb devices` com o que
+o Windows vê no USB (Gerenciador de Dispositivos) e mostra o problema e a solução:
+
+| Situação | Como ele percebe | O que oferece |
+|---|---|---|
+| Falta driver | Aparelho com ⚠ (erro de driver) no USB | Samsung: botão que instala o driver. Motorola: link do Motorola Device Manager. Outros: Windows Update ou Google USB Driver, com o passo a passo |
+| Depuração desligada | O celular aparece só como MTP (fotos) | Passo a passo (Xiaomi: também a opção de segurança) |
+| Esperando "Permitir" | `unauthorized` | Olhar a tela; depois de 40 s: revogar autorizações e **Reiniciar ADB** |
+| Offline / travado | `offline` | Reconectar e **Reiniciar ADB** |
+| Driver ok, mas o ADB não viu | Interface ADB funcionando e lista vazia | **Reiniciar ADB** |
+| Outro programa com o ADB | Erro de versão repetido ou porta 5037 ocupada | Mostra quem é (HiSuite, Mi PC Suite, Smart Switch, Vysor, BlueStacks...) e o botão **Resolver conflito** |
+| Cabo/porta ruim | "Dispositivo USB desconhecido" (erro 43) | Trocar cabo e porta |
+| Recovery | `recovery`/`sideload` | Reiniciar no sistema |
+| Dois celulares com o mesmo serial | Serial repetido (celular genérico) | Pede para deixar um de cada vez e não mexe em nenhum |
+
+Emuladores e conexões por Wi-Fi (`emulator-5554`, `127.0.0.1:5555`) são ignorados:
+o MestreScan só limpa o que está no cabo.
+
+Durante a remoção, erros conhecidos do Android viram dica no registro: Xiaomi sem
+"Depuração USB (Configurações de segurança)", Oppo/Realme sem "Desativar
+monitoramento de permissões", "Instalar via USB" desligado, app protegido por
+MDM (celular de empresa), cabo que soltou no meio.
+
+No PC: se a porta 5757 estiver ocupada por outro programa ele usa a próxima
+livre; se o MestreScan já estiver aberto, só abre o navegador. O instalador fecha
+o MestreScan e o ADB dele antes de atualizar ou desinstalar (senão daria
+"arquivo em uso") e recusa pastas com caminho comprido demais.
 
 ## Remoção
 
@@ -105,6 +132,8 @@ Troque `brand.json` (nome, slogan, cores, WhatsApp, endereço) e `public\logo.pn
 | `src/engine.js` | Pontuação (espelho do `RiskEngine.kt` do APK) |
 | `src/actions.js` | Remover, desativar, reativar, casos, foto da tela, instalar MestreScan |
 | `src/server.js` | API + fluxo automático + monitor do cabo (a cada 2 s) |
+| `src/diagnose.js` | Diagnóstico de conexão e dicas para erros do Android |
+| `src/usb.js` | Windows: aparelhos USB, dono da porta do ADB, correções |
 | `src/report.js` | Relatório do cliente |
 | `public/` | Tela (`index.html`, `app.js`, `style.css`) |
 | `windows/instalar.ps1` | Baixa Node/ADB na primeira vez e abre o servidor |
@@ -114,7 +143,7 @@ Troque `brand.json` (nome, slogan, cores, WhatsApp, endereço) e `public\logo.pn
 
 ```
 npm start   # abre o servidor (Node 18+)
-npm test    # 15 testes com o celular simulado
+npm test    # 22 testes com o celular simulado
 ```
 
 ## Próximos passos

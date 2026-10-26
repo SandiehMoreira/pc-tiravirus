@@ -68,12 +68,17 @@ async function backupApk(serial, pkg) {
   return { file: path.relative(adb.ROOT, file), sha256 };
 }
 
+/** O Android recusou o comando (Xiaomi/Oppo sem a opção de segurança, MDM...). */
+const refused = (out) => /SecurityException|Permission Denial|not allowed|java\.lang\.\w+Exception/i.test(out || '');
+
 async function removeAccessibility(serial, pkg) {
   const list = inspector.parseAccessibility(await adb.shell(serial, 'settings get secure enabled_accessibility_services'));
   const keep = list.filter((c) => c.split('/')[0] !== pkg);
   if (keep.length === list.length) return false;
-  if (keep.length) await adb.shell(serial, `settings put secure enabled_accessibility_services '${keep.join(':')}'`);
-  else await adb.shell(serial, 'settings delete secure enabled_accessibility_services; settings put secure accessibility_enabled 0');
+  const out = keep.length
+    ? await adb.shell(serial, `settings put secure enabled_accessibility_services '${keep.join(':')}'`)
+    : await adb.shell(serial, 'settings delete secure enabled_accessibility_services; settings put secure accessibility_enabled 0');
+  if (refused(out)) throw new Error(`não saiu (${out.split('\n')[0]})`);
   return true;
 }
 
@@ -116,9 +121,11 @@ async function removeApp(serial, app, { device, score, reasons } = {}) {
   try { backup = await backupApk(serial, pkg); } catch { /* backup não impede a remoção */ }
   step(backup ? `Backup do APK salvo (${backup.sha256.slice(0, 12)}…)` : 'Sem backup do APK');
 
-  if (await removeAccessibility(serial, pkg)) step('Acessibilidade retirada');
-  await adb.shell(serial, `appops set ${pkg} SYSTEM_ALERT_WINDOW deny`);
-  step('Sobreposição bloqueada');
+  try {
+    if (await removeAccessibility(serial, pkg)) step('Acessibilidade retirada');
+  } catch (e) { step(`Acessibilidade: ${e.message}`); }
+  const ops = await adb.shell(serial, `appops set ${pkg} SYSTEM_ALERT_WINDOW deny`);
+  step(refused(ops) ? `Sobreposição não bloqueou: ${ops.split('\n')[0]}` : 'Sobreposição bloqueada');
 
   const admin = await removeAdmins(serial, pkg);
   if (admin.had) step(admin.stuck.length ? 'Administrador não saiu pelo cabo' : 'Administrador retirado');
@@ -153,8 +160,11 @@ async function disableApp(serial, app) {
   checkPkg(app.pkg);
   const steps = [];
   await adb.shell(serial, `am force-stop ${app.pkg}`);
-  if (await removeAccessibility(serial, app.pkg)) steps.push('Acessibilidade retirada');
-  await adb.shell(serial, `appops set ${app.pkg} SYSTEM_ALERT_WINDOW deny`);
+  try {
+    if (await removeAccessibility(serial, app.pkg)) steps.push('Acessibilidade retirada');
+  } catch (e) { steps.push(`Acessibilidade: ${e.message}`); }
+  const ops = await adb.shell(serial, `appops set ${app.pkg} SYSTEM_ALERT_WINDOW deny`);
+  if (refused(ops)) steps.push(`Sobreposição não bloqueou: ${ops.split('\n')[0]}`);
   const out = await adb.shell(serial, `pm disable-user --user 0 ${app.pkg}`);
   const disabled = /new state: disabled/i.test(out);
   steps.push(disabled ? 'Desativado' : `Não desativou: ${out.split('\n')[0]}`);

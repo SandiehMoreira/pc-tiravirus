@@ -75,10 +75,15 @@ function parseDevices(text) {
   return out;
 }
 
+let lastStderr = '';
 async function devices() {
   const r = await run(['devices', '-l'], { timeout: 15000 });
+  lastStderr = r.stderr;
   if (r.code !== 0 && !r.stdout) throw new Error(r.stderr.trim() || 'adb devices falhou');
   return parseDevices(r.stdout);
 }
 
-module.exports = { findAdb, run, shell, devices, parseDevices, ROOT };
+/** Avisos do último "adb devices" (ex.: versão do servidor diferente = conflito). */
+const lastDevicesStderr = () => lastStderr;
+
+module.exports = { findAdb, run, shell, devices, lastDevicesStderr, parseDevices, ROOT };

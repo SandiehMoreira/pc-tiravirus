@@ -11,6 +11,8 @@ const inspector = require('./inspector');
 const engine = require('./engine');
 const actions = require('./actions');
 const report = require('./report');
+const diagnose = require('./diagnose');
+const usb = require('./usb');
 
 const ROOT = adb.ROOT;
 const PUBLIC = path.join(ROOT, 'public');
@@ -25,6 +27,8 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
   let active = null;
   let devices = [];
   let adbError = null;
+  // Diagnóstico da conexão (driver, depuração, conflito de ADB...).
+  const diag = { usb: null, usbAt: 0, usbBusy: false, problem: null, rival: null, mismatches: [], unauthorizedSince: null };
 
   // ---------- atendimento ----------
 
@@ -112,6 +116,8 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
       error: `${r.label}: não consegui (${result.message || result.steps.slice(-1)[0]}).`,
     }[result.state];
     log(s, msg, result.state === 'error' || result.state === 'admin_locked' ? 'warn' : 'ok');
+    const hint = diagnose.actionHint([...(result.steps || []), result.message || ''].join('\n'), s.device.manufacturer);
+    if (hint) log(s, hint, 'warn');
     return r;
   }
 
@@ -146,17 +152,29 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
     ticking = true;
     try {
       if (!adb.findAdb()) { adbError = 'ADB não encontrado'; devices = []; return; }
-      devices = await adb.devices();
-      adbError = null;
-      const connected = new Set(devices.filter((d) => d.state === 'device').map((d) => d.serial));
+      try {
+        devices = await adb.devices();
+        adbError = null;
+      } catch (e) {
+        devices = [];
+        throw e;
+      } finally {
+        checkAdbServer();
+      }
+      const local = devices.filter((d) => !diagnose.isRemoteSerial(d.serial));
+      // Celulares genéricos com o mesmo serial: o adb não separa, então não mexe em nenhum.
+      const counts = local.reduce((m, d) => m.set(d.serial, (m.get(d.serial) || 0) + 1), new Map());
+      const ready = local.filter((d) => d.state === 'device' && counts.get(d.serial) === 1);
+      diag.unauthorizedSince = local.some((d) => d.state === 'unauthorized') ? (diag.unauthorizedSince || Date.now()) : null;
+      if (!ready.length) refreshUsb();
+      const connected = new Set(ready.map((d) => d.serial));
       for (const s of sessions.values()) {
         if (s.connected && !connected.has(s.serial)) {
           s.connected = false;
           log(s, 'Cabo desconectado.');
         }
       }
-      for (const d of devices) {
-        if (d.state !== 'device') continue;
+      for (const d of ready) {
         const s = sessions.get(d.serial);
         if (s && s.connected) continue;
         const ns = newSession(d);
@@ -172,6 +190,43 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
     }
   }
 
+  /** Versão do ADB brigando com outro programa, porta 5037 ocupada... */
+  function checkAdbServer() {
+    const err = adb.lastDevicesStderr() + '\n' + (adbError || '');
+    const kind = diagnose.adbServerProblem(err);
+    const now = Date.now();
+    if (kind === 'version') diag.mismatches.push(now);
+    diag.mismatches = diag.mismatches.filter((t) => now - t < 60000);
+    // Uma troca de versão sozinha é normal (o adb resolve); repetindo é briga.
+    const problem = kind === 'port' || kind === 'daemon' ? kind : diag.mismatches.length >= 2 ? 'version' : null;
+    if (problem && !diag.problem) usb.portOwner().then((o) => { diag.rival = o && !o.mine ? o.label : null; }).catch(() => {});
+    if (!problem) diag.rival = null;
+    diag.problem = problem;
+  }
+
+  /** Pergunta ao Windows o que está no USB (no máximo a cada 4 s, sem travar o monitor). */
+  function refreshUsb() {
+    if (diag.usbBusy || Date.now() - diag.usbAt < 4000) return;
+    diag.usbBusy = true;
+    usb.scanUsb().then((u) => { diag.usb = u; }).catch(() => {}).finally(() => { diag.usbBusy = false; diag.usbAt = Date.now(); });
+  }
+
+  async function fix(kind) {
+    if (kind === 'restart-adb') {
+      const r = await usb.restartAdb();
+      diag.mismatches = []; diag.problem = null;
+      return r.ok ? 'ADB reiniciado.' : 'O ADB não reiniciou.';
+    }
+    if (kind === 'kill-rival') {
+      const r = await usb.killRival();
+      diag.mismatches = []; diag.problem = null; diag.rival = null;
+      return r.killed ? `Fechei o ADB do ${r.killed} e iniciei o do MestreScan.` : 'ADB do MestreScan reiniciado.';
+    }
+    if (kind === 'samsung-driver') { usb.samsungDriver(); return 'Abrindo o instalador do driver Samsung numa janela nova.'; }
+    if (kind === 'device-manager') { usb.deviceManager(); return 'Gerenciador de Dispositivos aberto.'; }
+    throw new Error('Correção desconhecida');
+  }
+
   // ---------- HTTP ----------
 
   function publicSession(s) {
@@ -184,7 +239,12 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
     return {
       brand,
       adb: { found: Boolean(adb.findAdb()), error: adbError },
-      devices,
+      devices: devices.map((d) => ({ ...d, remote: diagnose.isRemoteSerial(d.serial) })),
+      diag: diagnose.diagnose({
+        adbFound: Boolean(adb.findAdb()), adbProblem: diag.problem, rival: diag.rival,
+        devices, usb: diag.usb, unauthorizedSince: diag.unauthorizedSince,
+      }),
+      notes: diagnose.notes(devices),
       settings,
       sessions: [...sessions.values()].map((s) => ({ serial: s.serial, model: s.device.model, connected: s.connected, status: s.status })),
       session: publicSession(sessions.get(active)),
@@ -192,7 +252,7 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
   }
 
   function send(res, code, body, type = 'application/json; charset=utf-8') {
-    res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-App': 'MestreScan-PC' });
     res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
   }
 
@@ -276,6 +336,9 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
         log(cur, shot.foreground ? `Foto da tela: em primeiro plano está ${shot.foreground.pkg}` : 'Foto da tela tirada.');
         return send(res, 200, item);
       }
+      if (p === '/api/fix') {
+        return send(res, 200, { ok: true, message: await fix(body.fix) });
+      }
       if (p === '/api/open-admins') {
         const cur = needDevice();
         await actions.openAdminSettings(cur.serial);
@@ -284,7 +347,11 @@ function createApp({ port = 5757, monitorMs = 2000 } = {}) {
       if (p === '/api/install-mestrescan') {
         const cur = needDevice();
         log(cur, 'Instalando o MestreScan no celular…');
-        await enqueue(cur, 'install', () => actions.installMestreScan(cur.serial, brand.mestrescanApkUrl));
+        await enqueue(cur, 'install', () => actions.installMestreScan(cur.serial, brand.mestrescanApkUrl)).catch((e) => {
+          const hint = diagnose.actionHint(e.message, cur.device.manufacturer);
+          if (hint) log(cur, hint, 'warn');
+          throw e;
+        });
         log(cur, 'MestreScan instalado.', 'ok');
         return send(res, 200, { ok: true });
       }
@@ -321,24 +388,45 @@ function openBrowser(url) {
   exec(cmd, () => {});
 }
 
-if (require.main === module) {
-  const port = Number(process.env.PORT) || 5757;
-  const app = createApp({ port });
-  app.listen().then(() => {
+/** A porta está com o MestreScan (já aberto) ou com outro programa? */
+async function isMestreScan(port) {
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(3000) });
+    return r.headers.get('x-app') === 'MestreScan-PC';
+  } catch { return false; }
+}
+
+async function start() {
+  const first = Number(process.env.PORT) || 5757;
+  // Se outro programa estiver na 5757, tenta as próximas.
+  for (let port = first; port < first + 10; port++) {
+    try {
+      await createApp({ port }).listen();
+    } catch (e) {
+      if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES') throw e;
+      if (await isMestreScan(port)) {
+        console.log(`MestreScan PC já está aberto. Abrindo http://localhost:${port}`);
+        openBrowser(`http://localhost:${port}`);
+        setTimeout(() => process.exit(0), 1500);
+        return;
+      }
+      console.log(`  Porta ${port} ocupada por outro programa, tentando a ${port + 1}...`);
+      continue;
+    }
     const url = `http://localhost:${port}`;
     console.log(`\n  MestreScan PC rodando em ${url}`);
     console.log(`  ADB: ${adb.findAdb() || 'NÃO ENCONTRADO'}`);
     console.log('  Deixe esta janela aberta. Para sair, feche a janela.\n');
     if (!process.env.NO_BROWSER) openBrowser(url);
-  }).catch((e) => {
-    if (e.code === 'EADDRINUSE') {
-      console.log(`MestreScan PC já está aberto. Abrindo http://localhost:${port}`);
-      openBrowser(`http://localhost:${port}`);
-      setTimeout(() => process.exit(0), 1500);
-    } else {
-      console.error(e);
-      process.exit(1);
-    }
+    return;
+  }
+  throw new Error(`Nenhuma porta livre entre ${first} e ${first + 9}`);
+}
+
+if (require.main === module) {
+  start().catch((e) => {
+    console.error(e);
+    process.exit(1);
   });
 }
 
