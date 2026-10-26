@@ -1,0 +1,5 @@
+runtime/
+node_modules/
+# Casos: APKs de vírus e fotos de clientes ficam só no PC da loja.
+casos/*
+!casos/.gitkeep

@@ -1,0 +1,21 @@
+{
+  "app": "MestreScan PC",
+  "store": "MestreCell",
+  "tagline": "Mestre da Maçã",
+  "slogan": "Plugou o cabo, ele limpa.",
+  "address": "Rua Santa Bertila Boscardin, 250 — Santa Felicidade, Curitiba - PR",
+  "instagram": "@mestre_damaca",
+  "whatsapp": "5541991663168",
+  "whatsappDisplay": "(41) 99166-3168",
+  "logo": "logo.png",
+  "colors": {
+    "background": "#0B0B0D",
+    "surface": "#1C1C1F",
+    "primary": "#E0B23A",
+    "onPrimary": "#161616",
+    "text": "#F5F5F7",
+    "muted": "#9CA3AF",
+    "border": "#2E2E32"
+  },
+  "mestrescanApkUrl": "https://github.com/SandiehMoreira/MestreScan/releases/latest/download/MestreScan.apk"
+}

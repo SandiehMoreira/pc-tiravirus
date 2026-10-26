@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="token" content="__TOKEN__">
+  <title>MestreScan PC</title>
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <img class="logo" src="logo.png" alt="">
+    <div class="brand">
+      <div class="name" id="appName">MestreScan PC</div>
+      <div class="slogan" id="slogan">Plugou o cabo, ele limpa.</div>
+    </div>
+    <div class="cable" id="cable"><span class="dot"></span><span id="cableText">Procurando celular…</span></div>
+  </header>
+
+  <main>
+    <section id="waiting" class="card hidden"></section>
+
+    <section id="session" class="hidden">
+      <div class="card device">
+        <div>
+          <div class="muted">Aparelho</div>
+          <div class="big" id="devName">—</div>
+          <div class="muted" id="devSub"></div>
+        </div>
+        <div class="stats">
+          <div><b id="nDanger">0</b><span>perigosos</span></div>
+          <div><b id="nSuspect">0</b><span>suspeitos</span></div>
+          <div><b id="nDone">0</b><span>tratados</span></div>
+          <div><b id="nTotal">0</b><span>apps</span></div>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+
+      <div class="toolbar">
+        <button id="btnScan">Escanear de novo</button>
+        <button id="btnScreen">Pegar o anúncio na tela</button>
+        <button id="btnAdmins">Abrir administradores no celular</button>
+        <button id="btnInstall">Instalar MestreScan no celular</button>
+        <button id="btnReport" class="primary">Relatório do cliente</button>
+        <label class="toggle"><input type="checkbox" id="autoClean"> Remover perigosos sozinho</label>
+      </div>
+
+      <div id="screens"></div>
+
+      <h2>Perigosos <small>60+ pontos</small></h2>
+      <div id="listDanger" class="list"></div>
+
+      <h2>Suspeitos <small>30–59 pontos · você decide</small></h2>
+      <div id="listSuspect" class="list"></div>
+
+      <div id="bootBox"></div>
+
+      <details class="card">
+        <summary>Normais (<span id="nSafe">0</span>)</summary>
+        <div id="listSafe" class="list compact"></div>
+      </details>
+
+      <details class="card" open>
+        <summary>Registro</summary>
+        <div id="log" class="log"></div>
+      </details>
+    </section>
+
+    <div id="tabs" class="tabs hidden"></div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
