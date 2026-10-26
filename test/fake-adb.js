@@ -98,6 +98,8 @@ if (verb === 'shell') {
   fs.writeFileSync(rest[1], `APK FALSO de ${rest[0]}`);
   out('1 file pulled.');
 } else if (verb === 'exec-out') {
+  // FAKE_SCREEN_PNG: imagem de verdade para demonstração.
+  if (process.env.FAKE_SCREEN_PNG) { process.stdout.write(fs.readFileSync(process.env.FAKE_SCREEN_PNG)); process.exit(0); }
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200)]);
   process.stdout.write(png);
 } else if (verb === 'install') {
