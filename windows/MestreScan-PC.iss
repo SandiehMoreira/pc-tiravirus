@@ -1,12 +1,14 @@
 ; MestreScan PC - instalador tradicional (Setup.exe) feito com Inno Setup 6.
-; Gerar:  windows\gerar-setup.bat   (saida em build\MestreScan-PC-Setup.exe)
+; Gerar:  windows\gerar-setup.bat   (empacota o Electron e sai em build\MestreScan-PC-Setup.exe)
 ;
-; Instala so para o usuario (sem pedir administrador), baixa o Node portatil e o ADB
-; durante a instalacao, cria os atalhos e, se marcado, instala o driver USB da Samsung.
+; Instala so para o usuario (sem pedir administrador) o programa com janela propria
+; (Electron, ja traz o Node), baixa o ADB durante a instalacao, cria os atalhos e,
+; se marcado, instala o driver USB da Samsung.
+; O codigo fica em {app}\resources\app; casos\ fica em {app}\casos.
 
 #define AppName "MestreScan PC"
-#define AppVersion "0.3.0"
-#define NodeVersion "v22.12.0"
+#define AppVersion "0.4.0"
+#define AppDir "{app}\resources\app"
 
 [Setup]
 AppId={{6E1C8F2A-4B7D-4C3E-9A51-3F2D8B7E5C10}
@@ -25,58 +27,61 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ArchiveExtraction=full
 WizardStyle=modern
 SetupIconFile=mestrescan.ico
-UninstallDisplayIcon={app}\windows\mestrescan.ico
+UninstallDisplayIcon={app}\{#AppName}.exe
 UninstallDisplayName={#AppName}
 OutputDir=..\build
 OutputBaseFilename=MestreScan-PC-Setup
-Compression=lzma2
+Compression=lzma2/ultra64
 SolidCompression=yes
 
 [Languages]
 Name: "ptbr"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
 [Messages]
-ptbr.WelcomeLabel2=Este assistente vai instalar o [name/ver] no seu computador.%n%nPlugou o cabo, ele limpa: remove virus de propaganda de celulares Android pelo cabo USB.%n%nPrecisa de internet durante a instalacao (Node.js e ADB, cerca de 45 MB).
+ptbr.WelcomeLabel2=Este assistente vai instalar o [name/ver] no seu computador.%n%nPlugou o cabo, ele limpa: remove virus de propaganda de celulares Android pelo cabo USB.%n%nPrecisa de internet durante a instalacao (ADB, cerca de 8 MB).
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescription: "Atalhos:"
 Name: "samsung"; Description: "Instalar o driver USB da Samsung (recomendado: sem ele o Windows pode nao reconhecer celulares Samsung)"; GroupDescription: "Drivers:"
 
+[InstallDelete]
+; Versao 0.3 (abria no navegador pelo .bat com Node portatil).
+Type: filesandordirs; Name: "{app}\src"
+Type: filesandordirs; Name: "{app}\public"
+Type: filesandordirs; Name: "{app}\windows"
+Type: filesandordirs; Name: "{app}\runtime"
+Type: files; Name: "{app}\Abrir MestreScan PC.bat"
+Type: files; Name: "{app}\package.json"
+Type: files; Name: "{app}\README.md"
+Type: files; Name: "{app}\rules.json"
+Type: files; Name: "{app}\brand.json"
+
 [Files]
-Source: "..\Abrir MestreScan PC.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\package.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\rules.json"; DestDir: "{app}"; Flags: ignoreversion
+; Gerado por "npm run empacotar".
+Source: "..\build\MestreScan PC-win32-x64\*"; DestDir: "{app}"; Excludes: "\resources\app\brand.json"; \
+  Flags: ignoreversion recursesubdirs createallsubdirs
 ; brand.json e a lista de casos sao da loja: nao sobrescrever numa atualizacao.
-Source: "..\brand.json"; DestDir: "{app}"; Flags: onlyifdoesntexist
+Source: "..\brand.json"; DestDir: "{#AppDir}"; Flags: onlyifdoesntexist
 Source: "..\casos\.gitkeep"; DestDir: "{app}\casos"; Flags: onlyifdoesntexist
-Source: "..\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdirs
-Source: "..\public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
-Source: "instalar.ps1"; DestDir: "{app}\windows"; Flags: ignoreversion
-Source: "driver-samsung.ps1"; DestDir: "{app}\windows"; Flags: ignoreversion
-Source: "mestrescan.ico"; DestDir: "{app}\windows"; Flags: ignoreversion
-; Baixados durante a instalacao e extraidos em runtime\
-Source: "https://nodejs.org/dist/{#NodeVersion}/node-{#NodeVersion}-win-x64.zip"; DestName: "node.zip"; DestDir: "{app}\runtime"; \
-  Hash: "2b8f2256382f97ad51e29ff71f702961af466c4616393f767455501e6aece9b8"; \
-  ExternalSize: 34872043; Flags: external download extractarchive recursesubdirs ignoreversion
-Source: "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"; DestName: "platform-tools.zip"; DestDir: "{app}\runtime"; \
+; Baixado durante a instalacao e extraido em runtime\
+Source: "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"; DestName: "platform-tools.zip"; DestDir: "{#AppDir}\runtime"; \
   ExternalSize: 8044989; Flags: external download extractarchive recursesubdirs ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\Abrir MestreScan PC.bat"; WorkingDir: "{app}"; IconFilename: "{app}\windows\mestrescan.ico"; Flags: runminimized
-Name: "{group}\Instalar driver USB Samsung"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\windows\driver-samsung.ps1"""; IconFilename: "{app}\windows\mestrescan.ico"
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; WorkingDir: "{app}"
+Name: "{group}\Instalar driver USB Samsung"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{#AppDir}\windows\driver-samsung.ps1"""; IconFilename: "{#AppDir}\windows\mestrescan.ico"
 Name: "{group}\Pasta de casos (backups)"; Filename: "{app}\casos"
 Name: "{group}\Desinstalar {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Abrir MestreScan PC.bat"; WorkingDir: "{app}"; IconFilename: "{app}\windows\mestrescan.ico"; Flags: runminimized; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\windows\driver-samsung.ps1"""; \
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{#AppDir}\windows\driver-samsung.ps1"""; \
   StatusMsg: "Instalando o driver USB da Samsung..."; Flags: waituntilterminated; Tasks: samsung
-Filename: "{app}\Abrir MestreScan PC.bat"; WorkingDir: "{app}"; Description: "Abrir o MestreScan PC agora"; \
-  Flags: postinstall nowait skipifsilent shellexec runminimized
+Filename: "{app}\{#AppName}.exe"; WorkingDir: "{app}"; Description: "Abrir o MestreScan PC agora"; \
+  Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}\runtime"
+Type: filesandordirs; Name: "{#AppDir}\runtime"
 
 [Code]
 // Fecha o MestreScan aberto e o ADB dele (o adb.exe continua rodando em segundo
@@ -86,7 +91,8 @@ procedure FecharMestreScan();
 var
   Code: Integer;
 begin
-  // So o cmd.exe: a janela do proprio Setup ("MestreScan PC x.y.z - Instalador") tambem casa com o titulo.
+  // Versao 0.3 (janela do cmd). So o cmd.exe: a janela do proprio Setup
+  // ("MestreScan PC x.y.z - Instalador") tambem casa com o titulo.
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /FI "IMAGENAME eq cmd.exe" /FI "WINDOWTITLE eq MestreScan PC*"', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.Path -like ''' +
     ExpandConstant('{app}') + '\*'' } | Stop-Process -Force -ErrorAction SilentlyContinue"', '', SW_HIDE, ewWaitUntilTerminated, Code);
@@ -103,7 +109,7 @@ begin
   if CurUninstallStep = usUninstall then FecharMestreScan();
 end;
 
-// O Node tem arquivos com caminho comprido: pasta longa estoura o limite de 260 do Windows.
+// O Electron tem arquivos com caminho comprido: pasta longa estoura o limite de 260 do Windows.
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;

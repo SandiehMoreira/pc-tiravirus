@@ -1,15 +1,23 @@
 {
   "name": "mestrescan-pc",
-  "version": "0.3.0",
+  "productName": "MestreScan PC",
+  "version": "0.4.0",
   "description": "MestreScan PC — remove vírus de propaganda de celulares Android pelo cabo USB (ADB). Plugou o cabo, ele limpa.",
-  "main": "src/server.js",
+  "author": "MestreCell",
+  "main": "desktop/main.js",
   "private": true,
   "scripts": {
     "start": "node src/server.js",
-    "test": "node test/run-tests.js"
+    "app": "electron .",
+    "test": "node test/run-tests.js",
+    "empacotar": "electron-packager . \"MestreScan PC\" --platform=win32 --arch=x64 --out=build --overwrite --no-asar --icon=windows/mestrescan.ico --app-copyright=MestreCell --win32metadata.CompanyName=MestreCell --win32metadata.FileDescription=\"MestreScan PC\" --ignore=\"^/(runtime|casos|build|test|\\.git)(/|$)\" --ignore=\"\\.bat$\""
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.0.0"
   },
   "license": "UNLICENSED"
 }

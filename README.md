@@ -15,7 +15,8 @@ Por enquanto é só para **Windows**.
 Avançar › Avançar › Instalar. O instalador:
 
 - não pede administrador (instala em `%LOCALAPPDATA%\Programs\MestreScan PC`);
-- baixa o Node.js portátil e o ADB (platform-tools) durante a instalação;
+- instala o programa com janela própria (`MestreScan PC.exe`, feito com Electron,
+  que já traz o Node) e baixa o ADB (platform-tools) durante a instalação;
 - cria os atalhos no Menu Iniciar e na Área de Trabalho;
 - se a opção estiver marcada, baixa o **driver USB da Samsung** do site da
   Samsung (confere a assinatura digital) e abre o instalador dele. Também dá
@@ -26,17 +27,22 @@ Avançar › Avançar › Instalar. O instalador:
 O Windows pode mostrar "O Windows protegeu o computador" (o Setup não tem
 assinatura digital): clique em **Mais informações › Executar assim mesmo**.
 
-**Versão portátil:** extraia o zip e dê dois cliques em `Abrir MestreScan PC.bat`;
-na primeira vez ele baixa o Node.js e o ADB para a pasta `runtime\`.
+Na primeira vez o Firewall do Windows pode perguntar sobre o `adb.exe`: pode
+cancelar, o ADB pelo cabo funciona do mesmo jeito.
 
-Para gerar o Setup: `windows\gerar-setup.bat` (precisa do Inno Setup 6:
-`winget install JRSoftware.InnoSetup`). Sai em `build\MestreScan-PC-Setup.exe`.
+**Versão portátil:** extraia o zip e dê dois cliques em `Abrir MestreScan PC.bat`;
+na primeira vez ele baixa o Node.js e o ADB para a pasta `runtime\`. Essa versão
+abre no navegador.
+
+Para gerar o Setup: `windows\gerar-setup.bat` (precisa do Node e do Inno Setup 6:
+`winget install JRSoftware.InnoSetup`). Ele roda `npm run empacotar` (sai em
+`build\MestreScan PC-win32-x64`) e depois o Inno. Sai em `build\MestreScan-PC-Setup.exe`.
 
 ## Como usar
 
-1. Abra o **MestreScan PC** (atalho) ou `Abrir MestreScan PC.bat`.
-   A tela abre no navegador em http://localhost:5757. A janela preta fica
-   minimizada na barra de tarefas: fechar ela desliga o programa.
+1. Abra o **MestreScan PC** (atalho). A tela abre na janela do programa;
+   fechar a janela desliga o programa. Na versão portátil a tela abre no
+   navegador em http://localhost:5757 e a janela preta minimizada é que desliga.
 2. No celular, ligue a **Depuração USB** (Configurações › Sobre o telefone ›
    toque 7× em *Número da versão* › Opções do desenvolvedor › Depuração USB).
 3. Plugue o cabo e toque em **Permitir** no celular.
@@ -136,13 +142,15 @@ Troque `brand.json` (nome, slogan, cores, WhatsApp, endereço) e `public\logo.pn
 | `src/usb.js` | Windows: aparelhos USB, dono da porta do ADB, correções |
 | `src/report.js` | Relatório do cliente |
 | `public/` | Tela (`index.html`, `app.js`, `style.css`) |
-| `windows/instalar.ps1` | Baixa Node/ADB na primeira vez e abre o servidor |
+| `desktop/main.js` | Janela própria (Electron): sobe o servidor e mostra a tela |
+| `windows/instalar.ps1` | Versão portátil: baixa Node/ADB na primeira vez e abre o servidor |
 | `test/` | `fake-adb.js` (celular simulado) e `run-tests.js` |
 
 ## Desenvolvimento
 
 ```
-npm start   # abre o servidor (Node 18+)
+npm start   # abre o servidor no navegador (Node 18+)
+npm run app # abre na janela própria (Electron)
 npm test    # 22 testes com o celular simulado
 ```
 
@@ -151,4 +159,3 @@ npm test    # 22 testes com o celular simulado
 1. Testar em celulares reais com propaganda (Samsung, Xiaomi, Motorola) e ajustar
    pesos e parsers conforme a saída real do adb.
 2. Backend Node servindo `rules.json` e `maliciosos.json` para o PC e o APK.
-3. Empacotar como `.exe` para não depender do Node.
